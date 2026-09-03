@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "embodied-sync"
-version = "0.1.2"
+version = "0.1.3"
 description = "Multi-sensor synchronization, temporal calibration, and timing validation for robot-learning data."
 readme = "README.md"
 requires-python = ">=3.10"
