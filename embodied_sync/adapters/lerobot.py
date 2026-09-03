@@ -101,6 +101,22 @@ def _read_episode_metadata(meta_dir: Path) -> list[dict[str, Any]]:
     return rows
 
 
+def _data_file_row_bases(meta_dir: Path) -> dict[tuple[int, int], int]:
+    """Global row offset of each data file, keyed by ``(chunk, file)``.
+
+    ``dataset_from_index`` is a global row number and each file holds a
+    contiguous range, so a file's base is the smallest from-index among the
+    episodes stored in it. Computed over the *full* metadata so importing a
+    subset of episodes cannot shift a base.
+    """
+    bases: dict[tuple[int, int], int] = {}
+    for row in _read_episode_metadata(meta_dir):
+        key = (int(row["data/chunk_index"]), int(row["data/file_index"]))
+        base = int(row["dataset_from_index"])
+        bases[key] = min(base, bases.get(key, base))
+    return bases
+
+
 def load_lerobot_dataset(
     path: str | Path,
     *,
@@ -160,16 +176,7 @@ def load_lerobot_dataset(
     if not episode_rows:
         raise ValueError(f"LeRobot dataset has no episodes: {root}")
 
-    # Global row base per data file: dataset_from_index is a global row
-    # number; each file holds a contiguous range, so its base is the
-    # smallest from-index of the episodes stored in it (computed over the
-    # full metadata so max_episodes cannot shift bases).
-    all_rows = episode_rows if max_episodes is None else _read_episode_metadata(root / "meta")
-    file_base: dict[tuple[int, int], int] = {}
-    for row in all_rows:
-        key = (int(row["data/chunk_index"]), int(row["data/file_index"]))
-        base = int(row["dataset_from_index"])
-        file_base[key] = min(base, file_base.get(key, base))
+    file_base = _data_file_row_bases(root / "meta")
 
     stream_order = list(features)  # info.json order drives stream order
     run: dict[str, list[Sample]] = {

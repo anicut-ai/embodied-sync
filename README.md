@@ -2,21 +2,33 @@
 
 **Know whether your sensors agree before your policy pays the price.**
 
-Often, robot-learning sensor streams or datasets need to be sychronized. Cameras run at one
-rate, robot state at another, packets arrive late, and a device reconnect can
-silently reset its time offset. When you are trying to finish an experiment, the
-last thing you need is to discover after training that the observations were
-paired differently on the robot than they were in the dataset.
+`embodied-sync` is an open-source Python library for synchronizing, temporally
+calibrating, and validating multi-sensor robot-learning datasets and live sensor
+streams. It handles different sample rates, clock domains, clock skew and drift,
+late packets, jitter, missing frames, and causal policy observations.
 
-`embodied-sync` gives you one place to align, replay, inspect, and validate
-multimodal timing. It works with both live sensor streams and recordings, and
-it fits around the tools you already use: UMI, LeRobot, ROS 2/rosbag2 + MCAP,
-LSL/XDF, Rerun, and SurgSync-style datasets.
+Cameras run at one rate, robot state at another, packets arrive late, and a
+device reconnect can silently reset its clock. `embodied-sync` gives you one
+place to align, replay, inspect, validate, and stress-test that multimodal timing
+before a policy trains on or deploys with the wrong observations. It fits around
+UMI, LeRobot, ROS 2/rosbag2 + MCAP, LSL/XDF, Rerun, SurgSync-style datasets, and
+custom Python sensor SDKs; ROS is optional.
 
 > **Project status:** alpha. The live and recorded workflows work today and
 > have test coverage. Adapter support varies by format; [Current
 > scope](#current-scope) spells out what each one can do and which tests need
 > local data.
+
+This project focuses on **temporal** calibration and alignment. It does not
+calibrate camera intrinsics, sensor extrinsics, or hand-eye transforms; configure
+PTP; emulate a network; or promise hard real-time scheduling.
+
+Task-oriented guides:
+
+- [Synchronize a multi-sensor robot-learning dataset in Python](https://anicut-ai.github.io/embodied-sync/robot-learning-dataset-synchronization.html)
+- [Validate LeRobot v3 timestamps and temporal alignment](https://anicut-ai.github.io/embodied-sync/lerobot-timestamp-validation.html)
+- [Test robot-policy pipelines against latency, jitter, and delay](https://anicut-ai.github.io/embodied-sync/latency-jitter-robot-policy-testing.html)
+- [Handle multiple clocks, clock drift, and late packets](https://anicut-ai.github.io/embodied-sync/multi-clock-sensor-stream-synchronization.html)
 
 ## Start where your data is
 
@@ -218,6 +230,21 @@ The LeRobot section of the
 [`sync_quality_demo_plain.ipynb`](examples/notebooks/sync_quality_demo_plain.ipynb)
 shows the equivalent Python workflow and explains what happens to timestamp
 precision, episode boundaries, and video references.
+
+When LeRobot itself refuses to decode a frame — "no frame within tolerance" —
+a read-only audit says which of several failure modes is behind it, with
+nanosecond evidence you can attach to an issue:
+
+```bash
+embsync audit-lerobot-pts data/external/lerobot/pusht --json pts_evidence.json
+```
+
+It exits `0` only when the audit finds nothing — no residual over tolerance,
+every episode offset landing on its boundary frame, every video holding the
+frames its metadata declares — `1` on any finding, and `2` when the dataset
+cannot be audited. See
+[`audit_lerobot_pts.md`](docs/user/audit_lerobot_pts.md) for how to read the
+result and what it deliberately does not claim.
 
 ## Review results in the browser
 

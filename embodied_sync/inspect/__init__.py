@@ -20,6 +20,11 @@ provider, never here, so importing this subpackage costs a base install
 (numpy) and nothing else. Other datasets implement the same small provider
 contract without changing the inspector.
 
+:mod:`~embodied_sync.inspect.lerobot_pts` is the same idea aimed at a
+dataset rather than an alignment: it reproduces LeRobot's video timestamp
+check with full precision and reports which of several failure modes with
+one shared error message a local v3 dataset actually has.
+
 Typical use::
 
     inspection = inspection_from_alignment(alignment, events_a, events_b)
@@ -39,6 +44,22 @@ from embodied_sync.inspect.evidence import (
     perturb,
     residuals_ns,
     restrict_to_overlap,
+)
+from embodied_sync.inspect.lerobot_pts import (
+    DEFAULT_TOLERANCE_S,
+    BoundaryCheck,
+    DatasetAudit,
+    EpisodeTrend,
+    LeRobotPTSAuditError,
+    PTSQuery,
+    VideoAudit,
+    VideoEvidence,
+    audit_lerobot_dataset,
+    classify_video,
+    float32_ulp_ns,
+    legacy_float32_residual_ns,
+    precision_band_ns,
+    render_audit_text,
 )
 from embodied_sync.inspect.provider import (
     AudioClip,
@@ -66,8 +87,22 @@ from embodied_sync.inspect.verification import (
 __all__ = [
     "AMBIGUOUS_MARGIN",
     "DEFAULT_MAX_EVENTS",
+    "DEFAULT_TOLERANCE_S",
     "INDISTINCT_GRAY_LEVELS",
     "AlignmentVerifier",
+    "BoundaryCheck",
+    "DatasetAudit",
+    "EpisodeTrend",
+    "LeRobotPTSAuditError",
+    "PTSQuery",
+    "VideoAudit",
+    "VideoEvidence",
+    "audit_lerobot_dataset",
+    "classify_video",
+    "float32_ulp_ns",
+    "legacy_float32_residual_ns",
+    "precision_band_ns",
+    "render_audit_text",
     "HTTPAlignmentVerifier",
     "AudioClip",
     "BaseProvider",

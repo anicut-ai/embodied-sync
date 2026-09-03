@@ -70,6 +70,10 @@ _RUN_ADAPTERS = [_RUN_ADAPTER, _MCAP_ADAPTER]
 
 
 def build_parser() -> argparse.ArgumentParser:
+    # Imported here rather than at module scope so the CLI's import surface
+    # stays as light as every other subcommand's (D-0001).
+    from embodied_sync.inspect.lerobot_pts import DEFAULT_TOLERANCE_S
+
     parser = argparse.ArgumentParser(
         prog="embsync",
         description="Sync-quality validation for robot-learning data.",
@@ -330,6 +334,29 @@ def build_parser() -> argparse.ArgumentParser:
         type=int,
         default=None,
         help="Import only the first N episodes (default: all).",
+    )
+
+    p_audit_pts = sub.add_parser(
+        "audit-lerobot-pts",
+        help="Check a LeRobot v3 dataset's Parquet timestamps against video PTS.",
+    )
+    p_audit_pts.add_argument("dataset_dir", help="LeRobot dataset root (contains meta/info.json).")
+    p_audit_pts.add_argument(
+        "--tolerance-s",
+        type=float,
+        default=DEFAULT_TOLERANCE_S,
+        help=f"LeRobot's video timestamp tolerance (default {DEFAULT_TOLERANCE_S}).",
+    )
+    p_audit_pts.add_argument(
+        "--json",
+        default=None,
+        help="Write the full-precision evidence document to this path.",
+    )
+    p_audit_pts.add_argument(
+        "--max-episodes",
+        type=int,
+        default=None,
+        help="Audit only the first N episodes (default: all).",
     )
 
     p_inspect_dataset = sub.add_parser(
@@ -964,6 +991,74 @@ def _cmd_inspect_dataset(args: argparse.Namespace) -> int:
     return 0
 
 
+def _write_audit_json(document: dict[str, object], path: str | Path) -> None:
+    out = Path(path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _cmd_audit_lerobot_pts(args: argparse.Namespace) -> int:
+    """Audit LeRobot video timestamp resolution; never modify the dataset.
+
+    Exit ``0`` only when the audit found nothing at all, ``1`` when it
+    completed and found something, ``2`` when the dataset could not be
+    audited. "Something" is wider than a residual over the tolerance: a
+    whole-frame episode offset produces no residual, and a legacy float32
+    rejection is the state a bug reporter is asking about, so both exit
+    ``1`` rather than reporting a clean dataset.
+
+    The evidence JSON is written for ``1``, and for ``2`` whenever there is
+    anything to write — a CI run or an issue report that only gets an exit
+    code has to be re-run by hand to learn anything.
+    """
+    from embodied_sync.inspect.lerobot_pts import (
+        LeRobotPTSAuditError,
+        audit_lerobot_dataset,
+        render_audit_text,
+    )
+
+    try:
+        audit = audit_lerobot_dataset(
+            args.dataset_dir,
+            tolerance_s=args.tolerance_s,
+            max_episodes=args.max_episodes,
+        )
+    except ModuleNotFoundError as exc:
+        print(
+            f"embsync audit-lerobot-pts: missing optional dependency {exc.name!r} "
+            f"(pip install 'embodied-sync[lerobot]')",
+            file=sys.stderr,
+        )
+        return 2
+    except LeRobotPTSAuditError as exc:
+        print(f"embsync audit-lerobot-pts: {exc}", file=sys.stderr)
+        if args.json is not None and exc.partial is not None:
+            document = exc.partial.to_dict()
+            document["error"] = str(exc)
+            _write_audit_json(document, args.json)
+            print(f"wrote partial audit evidence to {args.json}", file=sys.stderr)
+        return 2
+    except (
+        AttributeError,
+        FileNotFoundError,
+        KeyError,
+        OSError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        # Malformed metadata reaches here in whatever shape the file's own
+        # damage produces; none of it may surface as a traceback.
+        print(f"embsync audit-lerobot-pts: {exc}", file=sys.stderr)
+        return 2
+
+    if args.json is not None:
+        _write_audit_json(audit.to_dict(), args.json)
+    print(render_audit_text(audit))
+    if args.json is not None:
+        print(f"wrote audit evidence to {args.json}")
+    return 0 if audit.passed else 1
+
+
 def _cmd_verify(args: argparse.Namespace) -> int:
     """Call the library verifier client and emit its stable review document."""
     from embodied_sync.inspect import (
@@ -1295,6 +1390,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 2
     if args.command == "inspect-dataset":
         return _cmd_inspect_dataset(args)
+    if args.command == "audit-lerobot-pts":
+        return _cmd_audit_lerobot_pts(args)
     if args.command == "verify":
         return _cmd_verify(args)
     if args.command == "infer-import":

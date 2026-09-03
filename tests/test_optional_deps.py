@@ -31,6 +31,7 @@ FORBIDDEN = (
     "mcap",
     "lerobot",
     "pyarrow",
+    "av",
     "pylsl",
     "pyxdf",
     "zarr",
@@ -106,6 +107,10 @@ def test_package_import_does_not_touch_optional_dependencies() -> None:
         import embodied_sync.calibrate.events  # noqa: F401
         import embodied_sync.calibrate.semantic  # noqa: F401
         import embodied_sync.calibrate.visual_timestamp  # noqa: F401
+        # The LeRobot PTS audit needs pyarrow and av, both only inside
+        # function bodies: the module (and the CLI parser that reads its
+        # default tolerance) must import on a base install.
+        import embodied_sync.inspect.lerobot_pts  # noqa: F401
         # The top-level lazy re-exports must resolve without pulling
         # anything forbidden either (PEP 562 __getattr__).
         embodied_sync.init  # noqa: B018

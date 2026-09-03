@@ -24,6 +24,7 @@ alone.
 - [Acceptance-report template](acceptance_report_template.md)
 - [Worked fixture example](worked_example.md)
 - [Optional deep verification](user/optional_deep_verification.md)
+- [Audit LeRobot video timestamps](user/audit_lerobot_pts.md)
 
 The [repository README](../README.md) has installation and CLI instructions.
 The [sitemap](sitemap.xml) lists the crawlable site pages.

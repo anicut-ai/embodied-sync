@@ -5,15 +5,27 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "embodied-sync"
 version = "0.1.2"
-description = "Compatibility, replay, alignment, and sync-quality validation layer for robot-learning data."
+description = "Multi-sensor synchronization, temporal calibration, and timing validation for robot-learning data."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "Apache-2.0" }
 authors = [{ name = "embodied-sync contributors" }]
-keywords = ["robotics", "robot-learning", "synchronization", "timestamps", "datasets"]
+keywords = [
+  "robotics",
+  "robot-learning",
+  "multi-sensor-synchronization",
+  "temporal-alignment",
+  "clock-skew",
+  "clock-drift",
+  "latency",
+  "jitter",
+  "lerobot",
+  "datasets",
+]
 classifiers = [
   "Development Status :: 2 - Pre-Alpha",
   "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: Apache Software License",
   "Programming Language :: Python :: 3",
   "Topic :: Scientific/Engineering",
 ]
@@ -52,7 +64,10 @@ Issues = "https://github.com/anicut-ai/embodied-sync/issues"
 mcap = ["mcap>=1.1"]
 # pyarrow alone covers the native v3.0 reader/exporter; the full lerobot
 # package is only needed to consume the exported dataset with their tooling.
-lerobot = ["pyarrow>=14.0", "lerobot>=0.1"]
+# `av` is named explicitly rather than taken transitively from `lerobot`:
+# `audit-lerobot-pts` demuxes video packet timestamps itself, and a
+# dependency an audit needs must not be one another package happens to pull.
+lerobot = ["pyarrow>=14.0", "av>=12.0", "lerobot>=0.1"]
 lsl = ["pylsl>=1.16", "pyxdf>=1.16"]
 surg_sync = ["pyarrow>=14.0"]
 umi = ["zarr>=3.0", "numcodecs>=0.12"]
@@ -150,6 +165,6 @@ packages = ["embodied_sync"]
 # following into them entirely so type-checking `embodied_sync`
 # doesn't depend on the extras being installed.
 [[tool.mypy.overrides]]
-module = ["mcap.*", "lerobot.*", "pyarrow.*", "pylsl.*", "pyxdf.*", "zarr.*", "numcodecs.*", "rerun.*", "rerun_sdk.*", "h5py.*"]
+module = ["mcap.*", "lerobot.*", "pyarrow.*", "av.*", "pylsl.*", "pyxdf.*", "zarr.*", "numcodecs.*", "rerun.*", "rerun_sdk.*", "h5py.*"]
 follow_imports = "skip"
 ignore_missing_imports = true
