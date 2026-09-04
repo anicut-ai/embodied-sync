@@ -99,7 +99,11 @@ embsync corrupt runs/clean \
 embsync align runs/bad \
   --out episodes/bad_10hz \
   --target-rate-hz 10 \
-  --check-ground-truth
+  --check-ground-truth \
+  --record-seed policy_sampler=123
+embsync replay episodes/bad_10hz \
+  --source runs/bad \
+  --verify
 embsync report episodes/bad_10hz \
   --out reports/bad.html \
   --json-summary reports/bad.json
@@ -109,6 +113,15 @@ Use `nearest_neighbor`, `zoh`, or `linear_interp` globally, or set a policy per
 stream. The right choice depends on what the signal means. The decision table
 in [`choosing_alignment_policy.md`](docs/user/choosing_alignment_policy.md)
 will help you choose instead of relying on the default.
+
+Every episode produced by the CLI includes versioned provenance: source and
+output fingerprints, the fully resolved per-stream tolerances, software
+identity, and known stochastic seeds. `embsync replay ... --verify` reruns the
+recorded policy and fails if the source, software identity, selected samples,
+or available payload content changed. `--record-seed` records downstream seed
+metadata; it does not seed or execute the downstream policy itself. See
+[`reproducible_replay.md`](docs/user/reproducible_replay.md) for the exact
+selection-versus-content guarantee and limitations around referenced media.
 
 The [sync-quality notebook](examples/notebooks/sync_quality_demo.ipynb) runs
 this same workflow in memory and plots where latency, jitter, drift, drops,

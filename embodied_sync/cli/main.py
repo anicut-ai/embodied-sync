@@ -61,6 +61,11 @@ from embodied_sync.ingest import (
     plan_source_rate_hz,
     save_json_document,
 )
+from embodied_sync.provenance import (
+    build_provenance,
+    parse_recorded_seeds,
+    verify_replay,
+)
 from embodied_sync.reports import build_report, report_summary_dict, save_report_html
 from embodied_sync.streams.synthetic import generate_synthetic_run
 
@@ -171,6 +176,45 @@ def build_parser() -> argparse.ArgumentParser:
             '{"cam_front":"zoh","robot_state":{"method":"linear_interp",'
             '"tolerance_ns":5000000}}. Overrides --method when supplied.'
         ),
+    )
+    p_align.add_argument(
+        "--record-seed",
+        action="append",
+        default=[],
+        metavar="NAME=INT",
+        help=(
+            "Record a namespaced stochastic seed in episode provenance; "
+            "repeatable (for example policy_sampler=42). Embodied-Sync's "
+            "synthetic/corruption seeds are copied automatically when present."
+        ),
+    )
+
+    p_replay = sub.add_parser(
+        "replay",
+        help="Replay and verify an aligned episode from its provenance.",
+    )
+    p_replay.add_argument("episode_dir", help="Aligned episode to verify.")
+    p_replay.add_argument(
+        "--source",
+        default=None,
+        help="Source run path; defaults to the path recorded in provenance.",
+    )
+    p_replay.add_argument(
+        "--adapter",
+        choices=_RUN_ADAPTERS,
+        default=None,
+        help="Source adapter; defaults to the adapter recorded in provenance.",
+    )
+    p_replay.add_argument(
+        "--verify",
+        action="store_true",
+        required=True,
+        help="Verify source, software, selected samples, and available content.",
+    )
+    p_replay.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the structured verification result as JSON.",
     )
 
     p_report = sub.add_parser("report", help="Generate a sync-quality report.")
@@ -640,6 +684,7 @@ def _cmd_align(args: argparse.Namespace) -> int:
         )
         alignment_policy = _parse_alignment_policy(args.alignment_policy)
         method: MethodArg = alignment_policy if alignment_policy is not None else args.method
+        recorded_seeds = parse_recorded_seeds(args.record_seed)
         ground_truth: dict[str, tuple[Sample, ...]] | None = None
         if args.check_ground_truth:
             try:
@@ -656,6 +701,17 @@ def _cmd_align(args: argparse.Namespace) -> int:
             method=method,
             ground_truth=ground_truth,
         )
+        source_manifest = _read_manifest(args.run_dir)
+        provenance = build_provenance(
+            run,
+            aligned,
+            source_path=args.run_dir,
+            source_manifest=source_manifest,
+            target_rate_hz=target_rate_hz,
+            method=method,
+            adapter=args.adapter,
+            recorded_seeds=recorded_seeds,
+        )
         save_episode(
             aligned,
             args.out,
@@ -664,6 +720,7 @@ def _cmd_align(args: argparse.Namespace) -> int:
             extra_manifest={
                 "source_run": str(Path(args.run_dir)),
                 "method": args.method,
+                "provenance": provenance,
             },
         )
     except (FileExistsError, FileNotFoundError, TypeError, ValueError) as exc:
@@ -678,6 +735,54 @@ def _cmd_align(args: argparse.Namespace) -> int:
         f"(missing per stream: {missing_summary})"
     )
     return 0
+
+
+def _cmd_replay(args: argparse.Namespace) -> int:
+    """Re-run an episode's recorded alignment and verify its provenance."""
+
+    try:
+        episode_manifest = _read_manifest(args.episode_dir)
+        raw_provenance = episode_manifest.get("provenance")
+        if not isinstance(raw_provenance, dict):
+            raise ValueError(
+                "episode has no provenance block; align it with this version first"
+            )
+        raw_source = raw_provenance.get("source")
+        if not isinstance(raw_source, dict):
+            raise ValueError("episode provenance has no source block")
+        source_path = args.source or raw_source.get("path")
+        if not isinstance(source_path, str) or not source_path:
+            raise ValueError(
+                "no source path was recorded; pass --source RUN_DIR"
+            )
+        recorded_adapter = raw_source.get("adapter", _RUN_ADAPTER)
+        adapter = args.adapter or recorded_adapter
+        if adapter not in _RUN_ADAPTERS:
+            raise ValueError(
+                f"unsupported recorded adapter {adapter!r}; pass --adapter"
+            )
+        run = _load_run_for_adapter(source_path, adapter)
+        source_manifest = _read_manifest(source_path)
+        episode = load_episode(args.episode_dir)
+        result = verify_replay(
+            run,
+            episode,
+            raw_provenance,
+            source_path=source_path,
+            source_manifest=source_manifest,
+        )
+    except (FileNotFoundError, KeyError, TypeError, ValueError) as exc:
+        print(f"embsync replay: {exc}", file=sys.stderr)
+        return 1
+
+    if args.json:
+        print(json.dumps(result.to_dict(), indent=2, sort_keys=True))
+    else:
+        status = "PASS" if result.verified else "FAIL"
+        print(f"replay verification: {status}")
+        for message in result.messages:
+            print(f"- {message}")
+    return 0 if result.verified else 1
 
 
 def _parse_alignment_policy(raw: str | None) -> MethodArg | None:
@@ -1379,6 +1484,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return _cmd_corrupt(args)
     if args.command == "align":
         return _cmd_align(args)
+    if args.command == "replay":
+        return _cmd_replay(args)
     if args.command == "report":
         return _cmd_report(args)
     if args.command == "calibrate":

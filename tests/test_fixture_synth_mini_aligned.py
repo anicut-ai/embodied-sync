@@ -46,11 +46,16 @@ def test_fixture_loads_and_matches_engine() -> None:
 
 
 def test_fixture_is_byte_identical_to_regeneration(tmp_path: Path) -> None:
-    """CLI-driven regeneration reproduces every committed byte.
+    """CLI-driven regeneration reproduces every legacy committed byte.
 
     Requires pytest's rootdir to be the repository root so the relative
     source-run path resolves. The rootdir is set implicitly by
     ``pyproject.toml`` at repo root (``testpaths = ["tests"]``).
+
+    The fixture intentionally predates deterministic replay provenance and
+    remains a compatibility pin for episodes without that additive manifest
+    block. New CLI output must match after removing only ``provenance``;
+    ``tests/test_provenance.py`` pins the new block itself.
     """
     regen_dir = tmp_path / "synth_mini_aligned"
     regen_args = [
@@ -71,7 +76,16 @@ def test_fixture_is_byte_identical_to_regeneration(tmp_path: Path) -> None:
     )
     assert fixture_files == regen_files
     for rel in fixture_files:
-        assert (FIXTURE_DIR / rel).read_bytes() == (regen_dir / rel).read_bytes(), (
+        fixture_bytes = (FIXTURE_DIR / rel).read_bytes()
+        regenerated_bytes = (regen_dir / rel).read_bytes()
+        if rel == Path("manifest.json"):
+            regenerated_manifest = json.loads(regenerated_bytes)
+            assert "provenance" in regenerated_manifest
+            regenerated_manifest.pop("provenance")
+            regenerated_bytes = (
+                json.dumps(regenerated_manifest, indent=2, sort_keys=True) + "\n"
+            ).encode("utf-8")
+        assert fixture_bytes == regenerated_bytes, (
             f"format drift in {rel}: committed fixture differs from regeneration "
             f"(see data/fixtures/README.md)"
         )
