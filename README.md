@@ -14,10 +14,6 @@ before a policy trains on or deploys with the wrong observations. It fits around
 UMI, LeRobot, ROS 2/rosbag2 + MCAP, LSL/XDF, Rerun, SurgSync-style datasets, and
 custom Python sensor SDKs; ROS is optional.
 
-> **Project status:** alpha. The live and recorded workflows work today and
-> have test coverage. Adapter support varies by format; [Current
-> scope](#current-scope) spells out what each one can do and which tests need
-> local data.
 
 This project focuses on **temporal** calibration and alignment. It does not
 calibrate camera intrinsics, sensor extrinsics, or hand-eye transforms; configure
